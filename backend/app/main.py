@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from app.services import threat_intel
+from app.services import threat_intel, ai_engine
 
 app = FastAPI(title="Sentri API", version="0.1.0")
 
@@ -20,11 +20,13 @@ def root():
 
 @app.post("/analyze/message")
 def analyze_message(payload: MessagePayload):
+    result = ai_engine.analyze_message(payload.content)
+
     return {
-        "risk_level": "LOW",
-        "risk_score": 12,
-        "summary": "No significant threats detected in this message.",
-        "threats": [],
+        "risk_level": result["risk_level"],
+        "risk_score": result["risk_score"],
+        "summary": result["summary"],
+        "threats": result.get("flags", []),
         "recommendations": []
     }
 
