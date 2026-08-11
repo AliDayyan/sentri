@@ -75,10 +75,9 @@ def check_url(url: str) -> dict:
     harmless = stats.get("harmless", 0)
     undetected = stats.get("undetected", 0)
 
-    total_engines = malicious + suspicious + harmless + undetected
-    risk_score = 0
-    if total_engines > 0:
-        risk_score = round(((malicious * 2) + suspicious) / (total_engines * 2) * 100)
+    # Score based on absolute detections, not diluted by total engine count.
+    # Even a handful of malicious flags from reputable vendors should score high.
+    risk_score = min(100, (malicious * 8) + (suspicious * 3))
 
     if malicious >= 5:
         risk_level = "CRITICAL"
