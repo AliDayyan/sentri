@@ -23,11 +23,11 @@ class HomeScreen extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
-            _buildScanButton(context, 'Scan Message', Icons.message_outlined),
+            _buildScanButton(context, 'Scan Message', Icons.message_outlined, ScanType.message),
             const SizedBox(height: 12),
-            _buildScanButton(context, 'Scan URL', Icons.link),
+            _buildScanButton(context, 'Scan URL', Icons.link, ScanType.url),
             const SizedBox(height: 12),
-            _buildScanButton(context, 'Scan Screenshot', Icons.image_outlined),
+            _buildScanButton(context, 'Scan Screenshot', Icons.image_outlined, ScanType.screenshot),
             const SizedBox(height: 32),
             const Text(
               'Recent Scans',
@@ -48,12 +48,12 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildScanButton(BuildContext context, String label, IconData icon) {
+  Widget _buildScanButton(BuildContext context, String label, IconData icon, ScanType type) {
     return ElevatedButton.icon(
       onPressed: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const ScanScreen()),
+          MaterialPageRoute(builder: (context) => ScanScreen(scanType: type)),
         );
       },
       icon: Icon(icon),
