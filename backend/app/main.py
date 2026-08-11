@@ -1,6 +1,16 @@
 from fastapi import FastAPI
+from pydantic import BaseModel
+from app.services import threat_intel
 
 app = FastAPI(title="Sentri API", version="0.1.0")
+
+
+class MessagePayload(BaseModel):
+    content: str = ""
+
+
+class UrlPayload(BaseModel):
+    content: str = ""
 
 
 @app.get("/")
@@ -9,7 +19,7 @@ def root():
 
 
 @app.post("/analyze/message")
-def analyze_message(payload: dict):
+def analyze_message(payload: MessagePayload):
     return {
         "risk_level": "LOW",
         "risk_score": 12,
@@ -20,11 +30,22 @@ def analyze_message(payload: dict):
 
 
 @app.post("/analyze/url")
-def analyze_url(payload: dict):
+def analyze_url(payload: UrlPayload):
+    if not payload.content:
+        return {
+            "risk_level": "UNKNOWN",
+            "risk_score": 0,
+            "summary": "No URL provided.",
+            "threats": [],
+            "recommendations": []
+        }
+
+    result = threat_intel.check_url(payload.content)
+
     return {
-        "risk_level": "LOW",
-        "risk_score": 8,
-        "summary": "No significant threats detected in this URL.",
+        "risk_level": result["risk_level"],
+        "risk_score": result["risk_score"],
+        "summary": result["summary"],
         "threats": [],
         "recommendations": []
     }
