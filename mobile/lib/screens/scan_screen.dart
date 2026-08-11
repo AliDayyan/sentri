@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/api_service.dart';
 
 enum ScanType { message, url, screenshot }
 
@@ -15,6 +16,7 @@ class _ScanScreenState extends State<ScanScreen> {
   final TextEditingController _controller = TextEditingController();
   bool _isLoading = false;
   Map<String, dynamic>? _result;
+  String? _error;
 
   String get _title {
     switch (widget.scanType) {
@@ -42,19 +44,33 @@ class _ScanScreenState extends State<ScanScreen> {
     setState(() {
       _isLoading = true;
       _result = null;
+      _error = null;
     });
 
-    // Mock scan delay — will be replaced with real API call in Phase 4/5
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      Map<String, dynamic> response;
+      switch (widget.scanType) {
+        case ScanType.message:
+          response = await ApiService.analyzeMessage(_controller.text);
+          break;
+        case ScanType.url:
+          response = await ApiService.analyzeUrl(_controller.text);
+          break;
+        case ScanType.screenshot:
+          response = await ApiService.analyzeImage();
+          break;
+      }
 
-    setState(() {
-      _isLoading = false;
-      _result = {
-        'risk_level': 'LOW',
-        'risk_score': 12,
-        'summary': 'No significant threats detected in this content.',
-      };
-    });
+      setState(() {
+        _isLoading = false;
+        _result = response;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _error = 'Failed to reach Sentri backend: $e';
+      });
+    }
   }
 
   @override
@@ -98,6 +114,7 @@ class _ScanScreenState extends State<ScanScreen> {
                   : const Text('Scan Now'),
             ),
             const SizedBox(height: 32),
+            if (_error != null) _buildErrorCard(),
             if (_result != null) _buildResultCard(),
           ],
         ),
@@ -121,6 +138,20 @@ class _ScanScreenState extends State<ScanScreen> {
             Text('Tap to upload a screenshot', style: TextStyle(color: Colors.grey)),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildErrorCard() {
+    return Card(
+      color: Colors.red.withValues(alpha: 0.1),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Colors.red),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Text(_error!, style: const TextStyle(color: Colors.red)),
       ),
     );
   }
