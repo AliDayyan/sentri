@@ -1,7 +1,7 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, UploadFile, File
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from app.services import threat_intel, ai_engine
+from app.services import threat_intel, ai_engine, ocr_service
 from app.database import init_db, get_db, ScanRecord
 
 app = FastAPI(title="Sentri API", version="0.1.0")
@@ -80,20 +80,34 @@ def analyze_url(payload: UrlPayload, db: Session = Depends(get_db)):
 
 
 @app.post("/analyze/image")
-def analyze_image(payload: dict, db: Session = Depends(get_db)):
-    result = {
-        "risk_level": "LOW",
-        "risk_score": 10,
-        "summary": "No significant threats detected in this image.",
-    }
+async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    image_bytes = await file.read()
+    extracted_text = ocr_service.extract_text_from_image(image_bytes)
 
-    _save_scan(db, "image", "screenshot", result)
+    if extracted_text.startswith("__OCR_ERROR__"):
+        result = {
+            "risk_level": "UNKNOWN",
+            "risk_score": 0,
+            "summary": "Could not read text from this image.",
+            "flags": [],
+        }
+    elif not extracted_text:
+        result = {
+            "risk_level": "LOW",
+            "risk_score": 0,
+            "summary": "No readable text found in this image.",
+            "flags": [],
+        }
+    else:
+        result = ai_engine.analyze_message(extracted_text)
+
+    _save_scan(db, "image", extracted_text or "screenshot", result)
 
     return {
         "risk_level": result["risk_level"],
         "risk_score": result["risk_score"],
         "summary": result["summary"],
-        "threats": [],
+        "threats": result.get("flags", []),
         "recommendations": []
     }
 

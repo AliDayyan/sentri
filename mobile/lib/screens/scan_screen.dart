@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/api_service.dart';
 
 enum ScanType { message, url, screenshot }
@@ -14,6 +16,9 @@ class ScanScreen extends StatefulWidget {
 
 class _ScanScreenState extends State<ScanScreen> {
   final TextEditingController _controller = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
+
+  File? _selectedImage;
   bool _isLoading = false;
   Map<String, dynamic>? _result;
   String? _error;
@@ -40,6 +45,17 @@ class _ScanScreenState extends State<ScanScreen> {
     }
   }
 
+  Future<void> _pickImage() async {
+    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      setState(() {
+        _selectedImage = File(pickedFile.path);
+        _result = null;
+        _error = null;
+      });
+    }
+  }
+
   Future<void> _runScan() async {
     setState(() {
       _isLoading = true;
@@ -57,7 +73,14 @@ class _ScanScreenState extends State<ScanScreen> {
           response = await ApiService.analyzeUrl(_controller.text);
           break;
         case ScanType.screenshot:
-          response = await ApiService.analyzeImage();
+          if (_selectedImage == null) {
+            setState(() {
+              _isLoading = false;
+              _error = 'Please select a screenshot first.';
+            });
+            return;
+          }
+          response = await ApiService.analyzeImage(_selectedImage!);
           break;
       }
 
@@ -123,21 +146,29 @@ class _ScanScreenState extends State<ScanScreen> {
   }
 
   Widget _buildScreenshotPicker() {
-    return Container(
-      height: 200,
-      decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade400),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.upload_file, size: 48, color: Colors.grey),
-            SizedBox(height: 8),
-            Text('Tap to upload a screenshot', style: TextStyle(color: Colors.grey)),
-          ],
+    return GestureDetector(
+      onTap: _pickImage,
+      child: Container(
+        height: 220,
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey.shade400),
+          borderRadius: BorderRadius.circular(8),
         ),
+        child: _selectedImage == null
+            ? const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.upload_file, size: 48, color: Colors.grey),
+                    SizedBox(height: 8),
+                    Text('Tap to upload a screenshot', style: TextStyle(color: Colors.grey)),
+                  ],
+                ),
+              )
+            : ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(_selectedImage!, fit: BoxFit.cover, width: double.infinity),
+              ),
       ),
     );
   }

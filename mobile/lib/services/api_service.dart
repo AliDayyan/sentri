@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class ApiService {
@@ -23,12 +24,15 @@ class ApiService {
     return _handleResponse(response);
   }
 
-  static Future<Map<String, dynamic>> analyzeImage() async {
-    final response = await http.post(
+  static Future<Map<String, dynamic>> analyzeImage(File imageFile) async {
+    final request = http.MultipartRequest(
+      'POST',
       Uri.parse('$baseUrl/analyze/image'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({}),
     );
+    request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
     return _handleResponse(response);
   }
 
