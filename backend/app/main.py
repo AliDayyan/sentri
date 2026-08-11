@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, UploadFile, File
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from app.services import threat_intel, ai_engine, ocr_service
+from app.services import threat_intel, ai_engine, ocr_service, splunk_logger
 from app.database import init_db, get_db, ScanRecord
 
 app = FastAPI(title="Sentri API", version="0.1.0")
@@ -32,6 +32,10 @@ def _save_scan(db: Session, scan_type: str, content: str, result: dict):
     db.add(record)
     db.commit()
     db.refresh(record)
+
+    # Also send to Splunk (fails silently if Splunk is unreachable)
+    splunk_logger.log_scan_event(scan_type, preview, result)
+
     return record
 
 
