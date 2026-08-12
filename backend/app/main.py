@@ -8,7 +8,6 @@ from datetime import date
 
 app = FastAPI(title="Sentri API", version="0.1.0")
 
-# Simple in-memory rate limiter: {ip: {date: count}}
 scan_counts = defaultdict(lambda: defaultdict(int))
 DAILY_LIMIT = 3
 
@@ -163,3 +162,27 @@ def clear_history(db: Session = Depends(get_db)):
     db.query(ScanRecord).delete()
     db.commit()
     return {"status": "History cleared"}
+
+
+@app.get("/stats")
+def get_stats(db: Session = Depends(get_db)):
+    all_scans = db.query(ScanRecord).all()
+
+    total = len(all_scans)
+    by_risk = {"LOW": 0, "MEDIUM": 0, "HIGH": 0, "CRITICAL": 0, "UNKNOWN": 0}
+    by_type = {"message": 0, "url": 0, "image": 0}
+
+    for scan in all_scans:
+        by_risk[scan.risk_level] = by_risk.get(scan.risk_level, 0) + 1
+        by_type[scan.scan_type] = by_type.get(scan.scan_type, 0) + 1
+
+    avg_score = (
+        sum(s.risk_score for s in all_scans) / total if total > 0 else 0
+    )
+
+    return {
+        "total_scans": total,
+        "by_risk_level": by_risk,
+        "by_scan_type": by_type,
+        "average_risk_score": round(avg_score, 1),
+    }

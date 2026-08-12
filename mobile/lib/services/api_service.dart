@@ -59,6 +59,19 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> getStats() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/stats')).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        throw SentriApiException('Failed to load stats.', statusCode: response.statusCode);
+      }
+    } on SocketException {
+      throw SentriApiException('No internet connection.');
+    }
+  }
+
   static Future<http.Response> _post(String path, Map<String, dynamic> body) async {
     try {
       return await http
