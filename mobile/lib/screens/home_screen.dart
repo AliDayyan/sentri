@@ -39,6 +39,67 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _confirmClearHistory() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear Scan History?'),
+        content: const Text(
+          'This will permanently delete all your saved scan results. This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await ApiService.clearHistory();
+        _loadHistory();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('History cleared.')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to clear history.')),
+          );
+        }
+      }
+    }
+  }
+
+  void _showPrivacyInfo() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Your Privacy'),
+        content: const Text(
+          'Sentri analyzes the content you scan to detect scams and threats. '
+          'Scan results (risk level, score, and a short preview) are stored locally '
+          'in this app\'s history so you can review past scans. You can delete this '
+          'history at any time using the "Clear History" option.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Got it'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Color _riskColor(String? level) {
     switch (level) {
       case 'CRITICAL':
@@ -73,6 +134,13 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('SENTRI'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.privacy_tip_outlined),
+            tooltip: 'Privacy Info',
+            onPressed: _showPrivacyInfo,
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _loadHistory,
@@ -92,9 +160,20 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 12),
             _buildScanButton(context, 'Scan Screenshot', Icons.image_outlined, ScanType.screenshot),
             const SizedBox(height: 32),
-            const Text(
-              'Recent Scans',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Recent Scans',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                if (_scans.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: _confirmClearHistory,
+                    icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                    label: const Text('Clear', style: TextStyle(color: Colors.red)),
+                  ),
+              ],
             ),
             const SizedBox(height: 8),
             _buildHistorySection(),
@@ -168,7 +247,7 @@ class _HomeScreenState extends State<HomeScreen> {
           context,
           MaterialPageRoute(builder: (context) => ScanScreen(scanType: type)),
         );
-        _loadHistory(); // refresh history after returning from a scan
+        _loadHistory();
       },
       icon: Icon(icon),
       label: Text(label),

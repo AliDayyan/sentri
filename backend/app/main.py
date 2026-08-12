@@ -156,3 +156,10 @@ def get_history(db: Session = Depends(get_db)):
             for r in records
         ]
     }
+
+
+@app.delete("/history")
+def clear_history(db: Session = Depends(get_db)):
+    db.query(ScanRecord).delete()
+    db.commit()
+    return {"status": "History cleared"}

@@ -46,6 +46,13 @@ class ApiService {
     }
   }
 
+  static Future<void> clearHistory() async {
+    final response = await http.delete(Uri.parse('$baseUrl/history'));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to clear history');
+    }
+  }
+
   static Map<String, dynamic> _handleResponse(http.Response response) {
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
