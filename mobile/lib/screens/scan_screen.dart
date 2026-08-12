@@ -114,7 +114,7 @@ class _ScanScreenState extends State<ScanScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(_title)),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -147,6 +147,7 @@ class _ScanScreenState extends State<ScanScreen> {
             const SizedBox(height: 32),
             if (_error != null) _buildErrorCard(),
             if (_result != null) _buildResultCard(),
+            if (_result != null) _buildRiskFactorsSection(),
           ],
         ),
       ),
@@ -231,20 +232,7 @@ class _ScanScreenState extends State<ScanScreen> {
     final riskScore = _result!['risk_score'];
     final summary = _result!['summary'];
 
-    Color riskColor;
-    switch (riskLevel) {
-      case 'CRITICAL':
-        riskColor = Colors.red;
-        break;
-      case 'HIGH':
-        riskColor = Colors.deepOrange;
-        break;
-      case 'MEDIUM':
-        riskColor = Colors.amber;
-        break;
-      default:
-        riskColor = Colors.green;
-    }
+    Color riskColor = _riskColor(riskLevel);
 
     return Card(
       color: riskColor.withValues(alpha: 0.1),
@@ -273,5 +261,71 @@ class _ScanScreenState extends State<ScanScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildRiskFactorsSection() {
+    final riskFactors = _result!['risk_factors'];
+    if (riskFactors == null || riskFactors is! Map || riskFactors.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final detectedFactors = riskFactors.entries
+        .where((e) => e.value is Map && e.value['detected'] == true)
+        .toList();
+
+    if (detectedFactors.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Detected Warning Signs',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey),
+          ),
+          const SizedBox(height: 8),
+          ...detectedFactors.map((entry) {
+            final label = entry.key.toString().replaceAll('_', ' ');
+            final evidence = entry.value['evidence'] as String?;
+            return Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                leading: const Icon(Icons.warning_amber_rounded, color: Colors.deepOrange),
+                title: Text(
+                  _titleCase(label),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: evidence != null
+                    ? Text('"$evidence"', style: const TextStyle(fontStyle: FontStyle.italic))
+                    : null,
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  String _titleCase(String s) {
+    return s.split(' ').map((word) {
+      if (word.isEmpty) return word;
+      return word[0].toUpperCase() + word.substring(1);
+    }).join(' ');
+  }
+
+  Color _riskColor(String? level) {
+    switch (level) {
+      case 'CRITICAL':
+        return Colors.red;
+      case 'HIGH':
+        return Colors.deepOrange;
+      case 'MEDIUM':
+        return Colors.amber;
+      default:
+        return Colors.green;
+    }
   }
 }

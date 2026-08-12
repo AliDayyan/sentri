@@ -128,6 +128,7 @@ def analyze_message(
         "risk_score": result["risk_score"],
         "summary": result["summary"],
         "threats": result.get("flags", []),
+        "risk_factors": result.get("risk_factors", {}),
         "recommendations": []
     }
 
@@ -202,6 +203,7 @@ async def analyze_image(
         "risk_score": result["risk_score"],
         "summary": result["summary"],
         "threats": result.get("flags", []),
+        "risk_factors": result.get("risk_factors", {}),
         "recommendations": []
     }
 
