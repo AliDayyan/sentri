@@ -3,6 +3,7 @@ import base64
 import time
 import requests
 from dotenv import load_dotenv
+from app.services import typosquat_detector
 
 load_dotenv()
 
@@ -18,8 +19,10 @@ def _url_to_id(url: str) -> str:
 def check_url(url: str) -> dict:
     """
     Submits a URL to VirusTotal and retrieves its analysis.
-    Returns a simplified dict with risk info.
+    Also checks for typosquatting against known brands.
     """
+    typosquat_result = typosquat_detector.check_typosquatting(url)
+
     if not VIRUSTOTAL_API_KEY:
         return {
             "risk_level": "UNKNOWN",
@@ -31,7 +34,6 @@ def check_url(url: str) -> dict:
 
     headers = {"x-apikey": VIRUSTOTAL_API_KEY}
 
-    # Step 1: Submit the URL for scanning
     submit_response = requests.post(
         f"{VT_BASE_URL}/urls",
         headers=headers,
@@ -47,10 +49,7 @@ def check_url(url: str) -> dict:
             "suspicious_count": 0,
         }
 
-    # Step 2: Get the analysis using the URL's ID
     url_id = _url_to_id(url)
-
-    # Give VirusTotal a moment to process (free tier, simple approach)
     time.sleep(2)
 
     report_response = requests.get(
@@ -72,11 +71,7 @@ def check_url(url: str) -> dict:
 
     malicious = stats.get("malicious", 0)
     suspicious = stats.get("suspicious", 0)
-    harmless = stats.get("harmless", 0)
-    undetected = stats.get("undetected", 0)
 
-    # Score based on absolute detections, not diluted by total engine count.
-    # Even a handful of malicious flags from reputable vendors should score high.
     risk_score = min(100, (malicious * 8) + (suspicious * 3))
 
     if malicious >= 5:
@@ -88,10 +83,18 @@ def check_url(url: str) -> dict:
     else:
         risk_level = "LOW"
 
+    summary = f"{malicious} security vendors flagged this URL as malicious, {suspicious} as suspicious."
+
+    if typosquat_result["is_typosquat"]:
+        risk_score = min(100, risk_score + 40)
+        if risk_level in ("LOW", "MEDIUM"):
+            risk_level = "HIGH"
+        summary += f" This domain closely resembles '{typosquat_result['matched_brand']}' and may be impersonating it (typosquatting)."
+
     return {
         "risk_level": risk_level,
         "risk_score": risk_score,
-        "summary": f"{malicious} security vendors flagged this URL as malicious, {suspicious} as suspicious.",
+        "summary": summary,
         "malicious_count": malicious,
         "suspicious_count": suspicious,
     }
