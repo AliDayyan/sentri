@@ -1,10 +1,24 @@
-from fastapi import FastAPI, Depends, UploadFile, File
+from fastapi import FastAPI, Depends, UploadFile, File, Request, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from app.services import threat_intel, ai_engine, ocr_service, splunk_logger
 from app.database import init_db, get_db, ScanRecord
+from collections import defaultdict
+from datetime import date
 
 app = FastAPI(title="Sentri API", version="0.1.0")
+
+# Simple in-memory rate limiter: {ip: {date: count}}
+scan_counts = defaultdict(lambda: defaultdict(int))
+DAILY_LIMIT = 3
+
+
+def check_rate_limit(client_ip: str) -> bool:
+    today = str(date.today())
+    if scan_counts[client_ip][today] >= DAILY_LIMIT:
+        return False
+    scan_counts[client_ip][today] += 1
+    return True
 
 
 @app.on_event("startup")
@@ -33,7 +47,6 @@ def _save_scan(db: Session, scan_type: str, content: str, result: dict):
     db.commit()
     db.refresh(record)
 
-    # Also send to Splunk (fails silently if Splunk is unreachable)
     splunk_logger.log_scan_event(scan_type, preview, result)
 
     return record
@@ -45,9 +58,12 @@ def root():
 
 
 @app.post("/analyze/message")
-def analyze_message(payload: MessagePayload, db: Session = Depends(get_db)):
-    result = ai_engine.analyze_message(payload.content)
+def analyze_message(payload: MessagePayload, request: Request, db: Session = Depends(get_db)):
+    client_ip = request.client.host
+    if not check_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Daily scan limit reached. Upgrade to Pro for unlimited scans.")
 
+    result = ai_engine.analyze_message(payload.content)
     _save_scan(db, "message", payload.content, result)
 
     return {
@@ -60,7 +76,11 @@ def analyze_message(payload: MessagePayload, db: Session = Depends(get_db)):
 
 
 @app.post("/analyze/url")
-def analyze_url(payload: UrlPayload, db: Session = Depends(get_db)):
+def analyze_url(payload: UrlPayload, request: Request, db: Session = Depends(get_db)):
+    client_ip = request.client.host
+    if not check_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Daily scan limit reached. Upgrade to Pro for unlimited scans.")
+
     if not payload.content:
         return {
             "risk_level": "UNKNOWN",
@@ -71,7 +91,6 @@ def analyze_url(payload: UrlPayload, db: Session = Depends(get_db)):
         }
 
     result = threat_intel.check_url(payload.content)
-
     _save_scan(db, "url", payload.content, result)
 
     return {
@@ -84,7 +103,11 @@ def analyze_url(payload: UrlPayload, db: Session = Depends(get_db)):
 
 
 @app.post("/analyze/image")
-async def analyze_image(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def analyze_image(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    client_ip = request.client.host
+    if not check_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Daily scan limit reached. Upgrade to Pro for unlimited scans.")
+
     image_bytes = await file.read()
     extracted_text = ocr_service.extract_text_from_image(image_bytes)
 
