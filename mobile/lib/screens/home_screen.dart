@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'scan_screen.dart';
 import 'stats_screen.dart';
+import 'auth_screen.dart';
 import '../services/api_service.dart';
+import '../main.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -101,6 +103,46 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Future<void> _logout() async {
+    await ApiService.logout();
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const AuthScreen()),
+      );
+    }
+  }
+
+  void _toggleTheme() {
+    final appState = SentriApp.of(context);
+    if (appState == null) return;
+
+    final current = appState.themeMode;
+    ThemeMode next;
+    if (current == ThemeMode.light) {
+      next = ThemeMode.dark;
+    } else if (current == ThemeMode.dark) {
+      next = ThemeMode.system;
+    } else {
+      next = ThemeMode.light;
+    }
+    setState(() {
+      appState.setThemeMode(next);
+    });
+  }
+
+  IconData _themeIcon() {
+    final mode = SentriApp.of(context)?.themeMode ?? ThemeMode.system;
+    switch (mode) {
+      case ThemeMode.light:
+        return Icons.light_mode;
+      case ThemeMode.dark:
+        return Icons.dark_mode;
+      case ThemeMode.system:
+        return Icons.brightness_auto;
+    }
+  }
+
   Color _riskColor(String? level) {
     switch (level) {
       case 'CRITICAL':
@@ -137,6 +179,11 @@ class _HomeScreenState extends State<HomeScreen> {
         centerTitle: true,
         actions: [
           IconButton(
+            icon: Icon(_themeIcon()),
+            tooltip: 'Toggle Theme',
+            onPressed: _toggleTheme,
+          ),
+          IconButton(
             icon: const Icon(Icons.bar_chart),
             tooltip: 'Stats',
             onPressed: () {
@@ -150,6 +197,11 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.privacy_tip_outlined),
             tooltip: 'Privacy Info',
             onPressed: _showPrivacyInfo,
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            tooltip: 'Log Out',
+            onPressed: _logout,
           ),
         ],
       ),

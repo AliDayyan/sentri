@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class SentriApiException implements Exception {
   final String message;
@@ -13,6 +14,55 @@ class SentriApiException implements Exception {
 
 class ApiService {
   static const String baseUrl = 'http://10.0.2.2:8001';
+  static const _storage = FlutterSecureStorage();
+  static const _tokenKey = 'sentri_access_token';
+
+  // ---- Auth ----
+
+  static Future<void> register(String email, String password) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/register'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'password': password}),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      await _storage.write(key: _tokenKey, value: data['access_token']);
+    } else {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      throw SentriApiException(data['detail'] ?? 'Registration failed.');
+    }
+  }
+
+  static Future<void> login(String email, String password) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/login'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'password': password}),
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      await _storage.write(key: _tokenKey, value: data['access_token']);
+    } else {
+      throw SentriApiException('Invalid email or password.');
+    }
+  }
+
+  static Future<void> logout() async {
+    await _storage.delete(key: _tokenKey);
+  }
+
+  static Future<bool> isLoggedIn() async {
+    final token = await _storage.read(key: _tokenKey);
+    return token != null;
+  }
+
+  static Future<Map<String, String>> _authHeaders() async {
+    final token = await _storage.read(key: _tokenKey);
+    return token != null ? {'Authorization': 'Bearer $token'} : {};
+  }
+
+  // ---- Scanning ----
 
   static Future<Map<String, dynamic>> analyzeMessage(String message) async {
     final response = await _post('/analyze/message', {'content': message});
@@ -26,7 +76,9 @@ class ApiService {
 
   static Future<Map<String, dynamic>> analyzeImage(File imageFile) async {
     try {
+      final authHeaders = await _authHeaders();
       final request = http.MultipartRequest('POST', Uri.parse('$baseUrl/analyze/image'));
+      request.headers.addAll(authHeaders);
       request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
       final streamedResponse = await request.send().timeout(const Duration(seconds: 20));
       final response = await http.Response.fromStream(streamedResponse);
@@ -40,7 +92,10 @@ class ApiService {
 
   static Future<List<Map<String, dynamic>>> getHistory() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/history')).timeout(const Duration(seconds: 10));
+      final headers = await _authHeaders();
+      final response = await http
+          .get(Uri.parse('$baseUrl/history'), headers: headers)
+          .timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['scans']);
@@ -53,7 +108,8 @@ class ApiService {
   }
 
   static Future<void> clearHistory() async {
-    final response = await http.delete(Uri.parse('$baseUrl/history'));
+    final headers = await _authHeaders();
+    final response = await http.delete(Uri.parse('$baseUrl/history'), headers: headers);
     if (response.statusCode != 200) {
       throw SentriApiException('Failed to clear history.');
     }
@@ -61,7 +117,10 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getStats() async {
     try {
-      final response = await http.get(Uri.parse('$baseUrl/stats')).timeout(const Duration(seconds: 10));
+      final headers = await _authHeaders();
+      final response = await http
+          .get(Uri.parse('$baseUrl/stats'), headers: headers)
+          .timeout(const Duration(seconds: 10));
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       } else {
@@ -74,10 +133,11 @@ class ApiService {
 
   static Future<http.Response> _post(String path, Map<String, dynamic> body) async {
     try {
+      final authHeaders = await _authHeaders();
       return await http
           .post(
             Uri.parse('$baseUrl$path'),
-            headers: {'Content-Type': 'application/json'},
+            headers: {'Content-Type': 'application/json', ...authHeaders},
             body: jsonEncode(body),
           )
           .timeout(const Duration(seconds: 20));
