@@ -1,5 +1,5 @@
-from sqlalchemy import create_engine, Column, Integer, String, DateTime
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from datetime import datetime, timezone
 
 DATABASE_URL = "sqlite:///./sentri.db"
@@ -9,12 +9,22 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 class ScanRecord(Base):
     __tablename__ = "scans"
 
     id = Column(Integer, primary_key=True, index=True)
-    scan_type = Column(String, index=True)  # "message", "url", "image"
-    content_preview = Column(String)        # short preview of what was scanned
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    scan_type = Column(String, index=True)
+    content_preview = Column(String)
     risk_level = Column(String)
     risk_score = Column(Integer)
     summary = Column(String)
