@@ -22,6 +22,7 @@ class _ScanScreenState extends State<ScanScreen> {
   bool _isLoading = false;
   Map<String, dynamic>? _result;
   String? _error;
+  bool _isRateLimitError = false;
 
   String get _title {
     switch (widget.scanType) {
@@ -61,6 +62,7 @@ class _ScanScreenState extends State<ScanScreen> {
       _isLoading = true;
       _result = null;
       _error = null;
+      _isRateLimitError = false;
     });
 
     try {
@@ -88,10 +90,16 @@ class _ScanScreenState extends State<ScanScreen> {
         _isLoading = false;
         _result = response;
       });
+    } on SentriApiException catch (e) {
+      setState(() {
+        _isLoading = false;
+        _error = e.message;
+        _isRateLimitError = e.statusCode == 429;
+      });
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _error = 'Failed to reach Sentri backend: $e';
+        _error = 'Something went wrong. Please try again.';
       });
     }
   }
@@ -174,15 +182,46 @@ class _ScanScreenState extends State<ScanScreen> {
   }
 
   Widget _buildErrorCard() {
+    final isRateLimit = _isRateLimitError;
     return Card(
-      color: Colors.red.withValues(alpha: 0.1),
+      color: (isRateLimit ? Colors.amber : Colors.red).withValues(alpha: 0.1),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Colors.red),
+        side: BorderSide(color: isRateLimit ? Colors.amber : Colors.red),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Text(_error!, style: const TextStyle(color: Colors.red)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  isRateLimit ? Icons.hourglass_bottom : Icons.error_outline,
+                  color: isRateLimit ? Colors.amber.shade800 : Colors.red,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _error!,
+                    style: TextStyle(color: isRateLimit ? Colors.amber.shade900 : Colors.red),
+                  ),
+                ),
+              ],
+            ),
+            if (!isRateLimit) ...[
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: _isLoading ? null : _runScan,
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text('Retry'),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
